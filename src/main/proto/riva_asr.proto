@@ -1,0 +1,136 @@
+syntax = "proto3";
+
+package nvidia.riva.asr;
+
+option java_multiple_files = true;
+option java_package = "com.example.grpc.riva";
+option java_outer_classname = "RivaAsrProto";
+
+// The main ASR service definition
+service RivaASR {
+  // Performs synchronous speech recognition on audio data
+  rpc Recognize(RecognizeRequest) returns (RecognizeResponse) {}
+
+  // Performs streaming speech recognition
+  rpc StreamingRecognize(stream StreamingRecognizeRequest) returns (stream StreamingRecognizeResponse) {}
+}
+
+// Configuration for the speech recognition request
+message RecognitionConfig {
+  // Required. The language of the supplied audio as a BCP-47 language tag.
+  string language_code = 1;
+
+  // Optional. Maximum number of recognition hypotheses to return.
+  int32 max_alternatives = 2;
+
+  // Optional. If enabled, adds punctuation to recognition result.
+  bool enable_automatic_punctuation = 3;
+
+  // Optional. If enabled, outputs word timing information.
+  bool enable_word_time_offsets = 4;
+
+  // Optional. Sample rate of the supplied audio, in Hertz.
+  int32 sample_rate_hertz = 5;
+
+  // Optional. Audio encoding of the supplied audio data.
+  AudioEncoding encoding = 6;
+}
+
+// Audio encoding types
+enum AudioEncoding {
+  // Not specified.
+  ENCODING_UNSPECIFIED = 0;
+
+  // Uncompressed 16-bit signed little-endian samples (Linear PCM).
+  LINEAR_PCM = 1;
+
+  // FLAC (Free Lossless Audio Codec) encoding.
+  FLAC = 2;
+
+  // WAV (Waveform Audio File Format) encoding.
+  WAV = 3;
+}
+
+// The audio input to be recognized.
+message AudioInput {
+  oneof audio_input {
+    // The audio data bytes encoded as specified in RecognitionConfig.
+    bytes content = 1;
+
+    // URI that points to a file that contains audio data.
+    string uri = 2;
+  }
+}
+
+// Describes the audio content to recognize.
+message RecognizeRequest {
+  // Required. Configuration for the recognition request.
+  RecognitionConfig config = 1;
+
+  // Required. The audio data to be recognized.
+  AudioInput audio = 2;
+}
+
+// Request message for StreamingRecognize.
+message StreamingRecognizeRequest {
+  oneof streaming_request {
+    // The streaming request, which is either a streaming config or audio content.
+    RecognitionConfig streaming_config = 1;
+    bytes audio_content = 2;
+  }
+}
+
+// Contains recognition results.
+message RecognizeResponse {
+  // Sequential list of transcription results.
+  repeated SpeechRecognitionResult results = 1;
+}
+
+// Streaming recognition results.
+message StreamingRecognizeResponse {
+  // Results for the streaming request.
+  repeated StreamingRecognitionResult results = 1;
+}
+
+// A streaming recognition result.
+message StreamingRecognitionResult {
+  // Multiple recognition hypotheses.
+  repeated SpeechRecognitionAlternative alternatives = 1;
+
+  // If true, this is the final time the speech service will return this particular response.
+  bool is_final = 2;
+
+  // Stability of the partial results.
+  float stability = 3;
+}
+
+// A speech recognition result.
+message SpeechRecognitionResult {
+  // Multiple recognition hypotheses ordered by confidence.
+  repeated SpeechRecognitionAlternative alternatives = 1;
+}
+
+// Alternative hypotheses for speech recognition.
+message SpeechRecognitionAlternative {
+  // Transcript text representing the words recognized.
+  string transcript = 1;
+
+  // The confidence estimate between 0.0 and 1.0.
+  float confidence = 2;
+
+  // Optional. A list of word-specific information for each recognized word.
+  repeated WordInfo words = 3;
+}
+
+// Word-specific information for recognized words.
+message WordInfo {
+  // Time offset relative to the beginning of the audio.
+  double start_time = 1;
+  double end_time = 2;
+
+  // The word corresponding to this set of information.
+  string word = 3;
+
+  // The confidence estimate between 0.0 and 1.0.
+  float confidence = 4;
+}
