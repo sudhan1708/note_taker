@@ -15,6 +15,9 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 
+import static com.hackathon.note_taker.utils.JsonExtractor.extractJsonString;
+import static com.hackathon.note_taker.utils.JsonExtractor.extractSummaryJson;
+
 @Slf4j
 @RestController
 @RequestMapping("/api/files")
@@ -53,10 +56,12 @@ public class ZipUploadController {
             List<String> summaries = new ArrayList<>();
             extractedTexts.forEach(chatExtractorService::storeChats);
             extractedTexts.forEach((fileName, chats) -> {
-                String summary = summaryService.getSummary(fileName).replaceAll("```json", "").replaceAll("```", "").trim();
+                String summary = summaryService.getSummary(fileName);
+                log.info("Summary : {}", summary);
+                String jsonPart = extractJsonString(summary);
                 String fileId = fileMetadataService.getFileIdByName(fileName);
-                summaries.add(summary);
-                summaryService.StoreSummary(new Summary(fileId, summary, fileName, fileId));
+                summaries.add(jsonPart);
+                summaryService.StoreSummary(new Summary(fileId, jsonPart, fileName, fileId));
             });
             log.info("Summaries : {}", summaries);
             return ResponseEntity.ok().body(new ResponseMessage<>(summaries.get(0)));
