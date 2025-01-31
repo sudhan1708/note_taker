@@ -1,8 +1,11 @@
 package com.hackathon.note_taker.services;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import com.hackathon.note_taker.config.MultipartFileResource;
 import com.hackathon.note_taker.constants.Prompts;
+import com.hackathon.note_taker.dto.api.Transcript;
 import com.hackathon.note_taker.factory.ModelServiceFactory;
 import com.hackathon.note_taker.models.Summary;
 import com.hackathon.note_taker.repository.SummaryRepository;
@@ -25,9 +28,11 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Type;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -64,21 +69,17 @@ public class SummaryService implements ISummaryService {
     }
 
     @Override
-    public WebRequestResponse generateAudioSummary(MultipartFile audioFile) throws IOException {
-        TranscriptionApiResponse transcriptionApiResponse = getAudioTranscription(audioFile);
+    public String generateAudioSummary(MultipartFile audioFile) throws IOException {
+        String transcriptionApiResponse = getAudioTranscription(audioFile);
         return transcriptionApiResponse;
     }
 
-    private TranscriptionApiResponse getAudioTranscription(MultipartFile audioFile) throws IOException {
+    private String getAudioTranscription(MultipartFile audioFile) throws IOException {
         HttpHeaders headers = new HttpHeaders();
-        headers.set("X-API-KEY", getTranscriptionApiKey);
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-
-        String payload = String.format("{\"audio_path_type\": \"file_upload\", \"diarization_required\": %b, \"model\": \"%s\"}", true, transcriptionModel);
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("file", new MultipartFileResource(audioFile));
-        body.add("payload", payload);
 
         HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
 
@@ -89,13 +90,23 @@ public class SummaryService implements ISummaryService {
                 String.class);
 
         TranscriptionApiResponse apiResponse = deserializeTranscriptionApiResponse(response.getBody());
-        return apiResponse;
+        return getSummaryFromScript(apiResponse);
     }
 
     public String getSummary(String fileName) {
         log.info("Generating summary for file {}", fileName);
         String fileId = fileMetadataService.getFileIdByName(fileName);
         List<String> chatMessages = chatExtractorService.getStoredChatMessagesByFile(fileId);
+        String prompt = Prompts.BASE_PROMPT + "\n" + chatMessages;
+        return modelServiceFactory.getModel(ModelServiceFactory.AI_MODEL.VERTEX_AI).predictChatResponse(prompt, VERTEX_AI_GEMINI_PRO);
+    }
+
+    public String getSummaryFromScript(TranscriptionApiResponse transcriptionApiResponse) {
+        //log.info("Generating summary form script {}", fileName);
+        List<String> chatMessages = new ArrayList<>();
+        for(TranscriptionApiResponse.Transcription message : transcriptionApiResponse.getTranscriptions()){
+            chatMessages.add(message.getSpeaker_label() + " : " + message.getTranscription());
+        }
         String prompt = Prompts.BASE_PROMPT + "\n" + chatMessages;
         return modelServiceFactory.getModel(ModelServiceFactory.AI_MODEL.VERTEX_AI).predictChatResponse(prompt, VERTEX_AI_GEMINI_PRO);
     }
@@ -115,11 +126,12 @@ public class SummaryService implements ISummaryService {
 
     public TranscriptionApiResponse deserializeTranscriptionApiResponse(String jsonResponse) {
         try {
-            ObjectMapper objectMapper = new ObjectMapper();
-            JsonNode rootNode = objectMapper.readTree(jsonResponse);
-            JsonNode dataNode = rootNode.get("data");
+            Gson gson = new Gson();
+            Type listType = new TypeToken<List<TranscriptionApiResponse.Transcription>>() {}.getType();
+            List<TranscriptionApiResponse.Transcription> myList = gson.fromJson(jsonResponse, listType);
 
-            return objectMapper.treeToValue(dataNode, TranscriptionApiResponse.class);
+            return new TranscriptionApiResponse(myList);
+
 
         } catch (Exception e) {
             e.printStackTrace();

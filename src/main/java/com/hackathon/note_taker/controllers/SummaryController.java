@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -24,10 +25,12 @@ public class SummaryController {
     private ISummaryService summaryService;
 
     @PostMapping(value = "/transcription", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<WebRequestResponse> generateAudioSummary(@RequestBody @ModelAttribute GenerateAudioSummaryRequestBody requestBody) throws IOException {
-        WebRequestResponse serviceResponse = summaryService.generateAudioSummary(requestBody.getFile());
-        log.info("Transcripts : {}", serviceResponse);
-        return new ResponseEntity<>(serviceResponse, HttpStatus.OK);
+    public Map<String, Object> generateAudioSummary(@RequestBody @ModelAttribute GenerateAudioSummaryRequestBody requestBody) throws IOException {
+        String res = summaryService.generateAudioSummary(requestBody.getFile());
+        log.info("Transcripts : {}", res);
+        Map<String, Object> serviceResponse = new HashMap<>();
+        serviceResponse.put("summery", res);
+        return serviceResponse;
     }
 
     @GetMapping("/chat/subjects")
