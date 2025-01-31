@@ -1,20 +1,28 @@
 package com.hackathon.note_taker.controllers;
 
 import com.hackathon.note_taker.dto.ResponseMessage;
+import com.hackathon.note_taker.services.ChatExtractorService;
 import com.hackathon.note_taker.utils.FileUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
-import java.util.zip.*;
 
 @Slf4j
 @RestController
 @RequestMapping("/api/files")
 public class ZipUploadController {
+
+    @Autowired
+    private final ChatExtractorService chatExtractorService;
+
+    public ZipUploadController(ChatExtractorService chatExtractorService) {
+        this.chatExtractorService = chatExtractorService;
+    }
 
     @PostMapping("/upload-zip")
     public ResponseEntity<ResponseMessage<String>> uploadZipFile(@RequestBody MultipartFile file) {
@@ -38,11 +46,9 @@ public class ZipUploadController {
 
             // Cleanup: Delete extracted files (Optional)
             FileUtils.deleteTempDirectory(tempDir);
-
             log.info("Extracted text : {}", extractedTexts);
-            extractedTexts.forEach((fileName, chats) -> {
+            extractedTexts.forEach(chatExtractorService::storeChats);
 
-            });
         } catch (IOException e) {
             extractedTexts.put("error", "Error processing ZIP file: " + e.getMessage());
             return ResponseEntity.internalServerError().body(new ResponseMessage<>("File texts extraction failed"));
