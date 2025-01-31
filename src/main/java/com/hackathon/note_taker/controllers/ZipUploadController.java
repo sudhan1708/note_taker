@@ -53,7 +53,7 @@ public class ZipUploadController {
             List<String> summaries = new ArrayList<>();
             extractedTexts.forEach(chatExtractorService::storeChats);
             extractedTexts.forEach((fileName, chats) -> {
-                String summary = summaryService.getSummary(fileName);
+                String summary = summaryService.getSummary(fileName).replaceAll("```json", "").replaceAll("```", "").trim();
                 String fileId = fileMetadataService.getFileIdByName(fileName);
                 summaries.add(summary);
                 summaryService.StoreSummary(new Summary(fileId, summary, fileName, fileId));

@@ -1,8 +1,15 @@
 package com.hackathon.note_taker.repository;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hackathon.note_taker.models.Summary;
+import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Repository
 public class SummaryRepository {
@@ -13,5 +20,35 @@ public class SummaryRepository {
 
     public void storeSummary(Summary summary) {
         elasticBaseRepository.saveDoc(summary, SUMMARY_INDEX);
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String,Object>> getAllSummarySubjects() {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(QueryBuilders.matchAllQuery());
+        List<Map<String, Object>> summaryDocs = elasticBaseRepository.getResultsBySize(SUMMARY_INDEX, searchSourceBuilder, Integer.MAX_VALUE);
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        return summaryDocs.stream()
+                .map(summaryDoc -> {
+                    Object summaryData = summaryDoc.get("summaryData");
+                    if (summaryData instanceof String) {  // Ensure it's a JSON string before parsing
+                        try {
+                            Map<String, Object> summaryMap = objectMapper.readValue((String) summaryData, Map.class);
+                            Map<String, Object> chatInfo = (Map<String, Object>) summaryMap.get("chat_info"); // Extract chat_info
+                            return chatInfo != null ? Map.of("subject", chatInfo.get("subject"), "fileId", summaryDoc.get("id")) : null; // Extract subject
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            return null;
+                        }
+                    }
+                    return null;
+                })
+                .filter(subject -> subject != null)  // Remove any null values from failed parsing
+                .collect(Collectors.toList());
+    }
+
+    public Map<String, Object> getSummaryByFileId(String fileId) {
+       return elasticBaseRepository.getResultById(SUMMARY_INDEX, fileId);
     }
 }

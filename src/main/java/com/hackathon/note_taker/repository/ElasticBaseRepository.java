@@ -181,4 +181,31 @@ public class ElasticBaseRepository {
         clearScrollRequest.addScrollId(scrollId);
         clientService.getClient().clearScroll(clearScrollRequest, RequestOptions.DEFAULT);
     }
+
+    public List<Map<String, Object>> getResultsBySize(String index, SearchSourceBuilder query, Integer size) {
+        // Check if the requested size exceeds the limit and use scroll if necessary
+        try {
+            query.timeout(TimeValue.timeValueSeconds(60));
+            if (size != null && size > 10000) {
+                query.size(5000);
+                return getResultsByScroll(index, query, size);
+            } else query.size(Objects.requireNonNullElse(size, 10000));
+
+            SearchRequest searchRequest = new SearchRequest(index);
+            searchRequest.source(query);
+            SearchResponse searchResponse = clientService.getClient().search(searchRequest, RequestOptions.DEFAULT);
+            if (searchResponse.getHits().getHits().length == 10000) {
+                return getResultsByScroll(index, query, Integer.MAX_VALUE);
+            }
+
+            return Arrays.stream(searchResponse.getHits().getHits())
+                    .map(SearchHit::getSourceAsMap)
+                    .collect(Collectors.toList());
+        }
+        catch (Exception ex){
+            log.error("Error in processing message: {}", ex.getMessage());
+            log.error("Failed to run query for index {} {}", index, query);
+            return null;
+        }
+    }
 }
