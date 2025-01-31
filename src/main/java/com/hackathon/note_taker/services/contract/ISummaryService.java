@@ -2,6 +2,7 @@ package com.hackathon.note_taker.services.contract;
 
 import com.hackathon.note_taker.dto.WebRequestResponse;
 import com.hackathon.note_taker.dto.response.AudioSummaryResponse;
+import com.hackathon.note_taker.models.Summary;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -14,4 +15,6 @@ public interface ISummaryService {
     public List<Map<String, Object>> getAllChatSummary();
 
     public Map<String, Object> getSummaryByFileId(String fileId);
+
+    void StoreSummary(Summary summary);
 }

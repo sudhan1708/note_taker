@@ -3,6 +3,7 @@ package com.hackathon.note_taker.controllers;
 import com.hackathon.note_taker.dto.WebRequestResponse;
 import com.hackathon.note_taker.dto.request.GenerateAudioSummaryRequestBody;
 import com.hackathon.note_taker.dto.response.AudioSummaryResponse;
+import com.hackathon.note_taker.models.Summary;
 import com.hackathon.note_taker.services.contract.ISummaryService;
 import jakarta.json.Json;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +17,9 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+
+import static com.hackathon.note_taker.utils.JsonExtractor.extractJsonString;
 
 @Slf4j
 @RestController
@@ -30,6 +34,9 @@ public class SummaryController {
         log.info("Transcripts : {}", res);
         Map<String, Object> serviceResponse = new HashMap<>();
         serviceResponse.put("summery", res);
+        String jsonPart = extractJsonString(res);
+        String fileId = UUID.randomUUID().toString();
+        summaryService.StoreSummary(new Summary(fileId, jsonPart, requestBody.getFile().getName(), fileId));
         return serviceResponse;
     }
 
