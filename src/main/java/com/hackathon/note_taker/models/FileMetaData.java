@@ -10,6 +10,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class FileMetaData {
+    private String id;
     private String fileId;
     private String fileName;
 }

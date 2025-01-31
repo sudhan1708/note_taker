@@ -5,8 +5,12 @@ import com.hackathon.note_taker.models.FileMetaData;
 import com.hackathon.note_taker.repository.ElasticBaseRepository;
 import com.hackathon.note_taker.utils.GenericDocumentProcessor;
 import lombok.extern.slf4j.Slf4j;
+import org.elasticsearch.index.query.BoolQueryBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.elasticsearch.search.sort.SortBuilders;
+import org.elasticsearch.search.sort.SortOrder;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.elasticsearch.core.IndexOperations;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -43,7 +47,7 @@ public class ChatExtractorService {
                         chat.get("message").toString()
                 )
         );
-        FileMetaData fileMetaData = new FileMetaData(fileId, fileName);
+        FileMetaData fileMetaData = new FileMetaData(fileId, fileId, fileName);
         elasticBaseRepository.saveDocs(chatDocs, CHAT_INDEX);
         elasticBaseRepository.saveDoc(fileMetaData, FILE_METADATA_INDEX);
         log.info("chats and file metadata stored successfully!");
@@ -67,5 +71,16 @@ public class ChatExtractorService {
         }
         scanner.close();
         return chatList;
+    }
+
+    public List<String> getStoredChatMessagesByFile(String fileId) {
+        log.info("Fetching chat messages for file id {}", fileId);
+        BoolQueryBuilder filter = new BoolQueryBuilder();
+        filter.should(QueryBuilders.termQuery("fileId.keyword", fileId));
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.sort(SortBuilders.fieldSort("timestamp.keyword").order(SortOrder.ASC));
+        sourceBuilder.query(QueryBuilders.boolQuery().filter(filter));
+        List<Map<String, Object>> chatDocuments = elasticBaseRepository.getResultsByQuery(CHAT_INDEX, sourceBuilder, Integer.MAX_VALUE);
+        return chatDocuments.stream().map(chatDoc -> chatDoc.get("message").toString()).toList();
     }
 }

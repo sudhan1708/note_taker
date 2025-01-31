@@ -1,7 +1,10 @@
 package com.hackathon.note_taker.controllers;
 
 import com.hackathon.note_taker.dto.ResponseMessage;
+import com.hackathon.note_taker.models.Summary;
 import com.hackathon.note_taker.services.ChatExtractorService;
+import com.hackathon.note_taker.services.FileMetadataService;
+import com.hackathon.note_taker.services.SummaryService;
 import com.hackathon.note_taker.utils.FileUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,40 +23,46 @@ public class ZipUploadController {
     @Autowired
     private final ChatExtractorService chatExtractorService;
 
-    public ZipUploadController(ChatExtractorService chatExtractorService) {
+    @Autowired
+    private final SummaryService summaryService;
+
+    @Autowired
+    private final FileMetadataService fileMetadataService;
+
+    public ZipUploadController(ChatExtractorService chatExtractorService, SummaryService summaryService, FileMetadataService fileMetadataService) {
         this.chatExtractorService = chatExtractorService;
+        this.summaryService = summaryService;
+        this.fileMetadataService = fileMetadataService;
     }
 
     @PostMapping("/upload-zip")
     public ResponseEntity<ResponseMessage<String>> uploadZipFile(@RequestBody MultipartFile file) {
         Map<String, String> extractedTexts = new HashMap<>();
 
-        // Check if the file is empty
         if (file.isEmpty()) {
             extractedTexts.put("error", "File upload failed: No file provided!");
             return ResponseEntity.badRequest().body(new ResponseMessage<>("No file provided"));
         }
 
         try {
-            // Create a temporary directory to store extracted files
             Path tempDir = Files.createTempDirectory("unzipped");
-
-            // Unzip the uploaded file
             FileUtils.unzipFile(file, tempDir);
-
-            // Read all extracted text files and store content in a Map
             extractedTexts = FileUtils.readTextFiles(tempDir);
-
-            // Cleanup: Delete extracted files (Optional)
             FileUtils.deleteTempDirectory(tempDir);
             log.info("Extracted text : {}", extractedTexts);
+            List<String> summaries = new ArrayList<>();
             extractedTexts.forEach(chatExtractorService::storeChats);
-
+            extractedTexts.forEach((fileName, chats) -> {
+                String summary = summaryService.getSummary(fileName);
+                String fileId = fileMetadataService.getFileIdByName(fileName);
+                summaries.add(summary);
+                summaryService.StoreSummary(new Summary(fileId, summary, fileName, fileId));
+            });
+            log.info("Summaries : {}", summaries);
+            return ResponseEntity.ok().body(new ResponseMessage<>(summaries.get(0)));
         } catch (IOException e) {
             extractedTexts.put("error", "Error processing ZIP file: " + e.getMessage());
             return ResponseEntity.internalServerError().body(new ResponseMessage<>("File texts extraction failed"));
         }
-
-        return ResponseEntity.ok().body(new ResponseMessage<>("File texts extracted successfully"));
     }
 }

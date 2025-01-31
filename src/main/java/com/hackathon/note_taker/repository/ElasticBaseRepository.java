@@ -45,6 +45,7 @@ public class ElasticBaseRepository {
     @Autowired
     protected ElasticSearchClientService clientService;
 
+
     public <T> void saveDoc(T document, String indexName) {
         try {
             // Create an IndexRequest for the given index
@@ -118,5 +119,66 @@ public class ElasticBaseRepository {
             }
         }
         return fieldsMap;
+    }
+
+
+    public List<Map<String, Object>> getResultsByQuery(String indexName, SearchSourceBuilder query, Integer size) {
+        try{
+            return getResultsByScroll(indexName, query, size);
+        } catch (Exception e) {
+            log.error("Error while executing query: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    public Map<String, Object> getResultById(String index, String id) {
+        try {
+            log.info(String.format("Getting data for Id : %s, Index : %s", id, index));
+            GetRequest getRequest = new GetRequest(index, id);
+            GetResponse getResponse = clientService.getClient().get(getRequest, RequestOptions.DEFAULT);
+            return getResponse.getSourceAsMap();
+        } catch (Exception e) {
+            log.error("Error while fetching from index {} : {}", index, e.getMessage());
+        }
+        return null;
+    }
+
+    private List<Map<String, Object>> getResultsByScroll(String index, SearchSourceBuilder query, Integer size) throws IOException {
+        try{
+            SearchRequest searchRequest = new SearchRequest(index);
+            searchRequest.scroll(TimeValue.timeValueMinutes(1L));
+            searchRequest.source(query);
+            log.info("Scrolling index {} with query: {}", index, query.toString());
+            Instant scrollStartTime = Instant.now();
+            SearchResponse searchResponse = clientService.getClient().search(searchRequest, RequestOptions.DEFAULT);
+            String scrollId = searchResponse.getScrollId();
+            List<Map<String, Object>> allHits = new ArrayList<>(Arrays.stream(searchResponse.getHits().getHits()).map(SearchHit::getSourceAsMap).toList());
+            Scroll scroll = new Scroll(TimeValue.timeValueMinutes(1L));
+
+            while (searchResponse.getHits().getHits() != null && searchResponse.getHits().getHits().length > 0 && allHits.size() < size) {
+                SearchScrollRequest scrollRequest = new SearchScrollRequest(scrollId);
+                scrollRequest.scroll(scroll);
+                searchResponse = clientService.getClient().scroll(scrollRequest, RequestOptions.DEFAULT);
+                scrollId = searchResponse.getScrollId();
+                allHits.addAll(Arrays.stream(searchResponse.getHits().getHits()).map(SearchHit::getSourceAsMap).toList());
+            }
+
+            clearScroll(scrollId);
+            Instant scrollEndTime = Instant.now();
+            Duration scrollingDuration = Duration.between(scrollStartTime, scrollEndTime);
+            log.info("Scrolling completed in {} seconds.", scrollingDuration.getSeconds());
+            return allHits.size() <= size ? allHits : allHits.subList(0, size);
+        } catch (Exception e){
+            log.error("Error in processing message: {}", e.getMessage());
+            log.error("Failed to run query in scroller for index {} {}", index, query);
+            throw e;
+        }
+    }
+
+
+    private void clearScroll(String scrollId) throws IOException {
+        ClearScrollRequest clearScrollRequest = new ClearScrollRequest();
+        clearScrollRequest.addScrollId(scrollId);
+        clientService.getClient().clearScroll(clearScrollRequest, RequestOptions.DEFAULT);
     }
 }
