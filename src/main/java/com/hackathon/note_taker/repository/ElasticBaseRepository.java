@@ -26,6 +26,7 @@ import org.elasticsearch.index.reindex.DeleteByQueryRequest;
 import org.elasticsearch.search.Scroll;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.aggregations.Aggregations;
+import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -207,5 +208,42 @@ public class ElasticBaseRepository {
             log.error("Failed to run query for index {} {}", index, query);
             return null;
         }
+    }
+
+    public Map<String, Object> getAggregationResults(String index, SearchSourceBuilder query) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            SearchRequest searchRequest = new SearchRequest(index);
+            searchRequest.source(query);
+            SearchResponse searchResponse = clientService.getClient().search(searchRequest, RequestOptions.DEFAULT);
+
+            // Extract search hits
+            List<Map<String, Object>> documents = Arrays.stream(searchResponse.getHits().getHits())
+                    .map(SearchHit::getSourceAsMap)
+                    .collect(Collectors.toList());
+
+            // Extract aggregation results
+            Map<String, Object> aggregationsMap = new HashMap<>();
+            Aggregations aggregations = searchResponse.getAggregations();
+            if (aggregations != null) {
+                Terms topBuckets = aggregations.get("top_buckets"); // Aggregation name
+                List<Map<String, Object>> aggResults = new ArrayList<>();
+                for (Terms.Bucket bucket : topBuckets.getBuckets()) {
+                    Map<String, Object> bucketData = new HashMap<>();
+                    bucketData.put("key", bucket.getKeyAsString());
+                    bucketData.put("count", bucket.getDocCount());
+                    aggResults.add(bucketData);
+                }
+                aggregationsMap.put("top_buckets", aggResults);
+            }
+
+            // Combine search hits and aggregations into result
+            result.put("documents", documents);
+            result.put("aggregations", aggregationsMap);
+
+        } catch (Exception e) {
+            log.error("Error while fetching results from index {}: {}", index, e.getMessage());
+        }
+        return result;
     }
 }

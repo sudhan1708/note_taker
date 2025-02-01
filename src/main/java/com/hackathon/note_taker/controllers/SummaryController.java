@@ -4,6 +4,7 @@ import com.hackathon.note_taker.dto.WebRequestResponse;
 import com.hackathon.note_taker.dto.request.GenerateAudioSummaryRequestBody;
 import com.hackathon.note_taker.dto.response.AudioSummaryResponse;
 import com.hackathon.note_taker.models.Summary;
+import com.hackathon.note_taker.services.ChatExtractorService;
 import com.hackathon.note_taker.services.contract.ISummaryService;
 import jakarta.json.Json;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,9 @@ public class SummaryController {
     @Autowired
     private ISummaryService summaryService;
 
+    @Autowired
+    private ChatExtractorService chatExtractorService;
+
     @PostMapping(value = "/transcription", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public Map<String, Object> generateAudioSummary(@RequestBody @ModelAttribute GenerateAudioSummaryRequestBody requestBody) throws IOException {
         String res = summaryService.generateAudioSummary(requestBody.getFile());
@@ -48,5 +52,10 @@ public class SummaryController {
     @GetMapping("/chat/{fileId}")
     public Map<String, Object> getSummaryByFileId(@PathVariable String fileId) {
         return summaryService.getSummaryByFileId(fileId);
+    }
+
+    @GetMapping("/chat/ratio/{fileId}")
+    public  List<Map<String, Object>> getChatsTalkRatio(@PathVariable String fileId) {
+        return chatExtractorService.getChatsTalkCount(fileId);
     }
 }

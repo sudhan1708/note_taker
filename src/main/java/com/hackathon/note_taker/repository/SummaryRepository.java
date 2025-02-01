@@ -35,7 +35,7 @@ public class SummaryRepository {
                     if (summaryData instanceof String) {  // Ensure it's a JSON string before parsing
                         try {
                             Map<String, Object> summaryMap = objectMapper.readValue((String) summaryData, Map.class);
-                            return summaryMap != null ? Map.of("summary", summaryMap.get("summary"), "fileId", summaryDoc.get("id")) : null; // Extract subject
+                            return summaryMap != null ? Map.of("summary", summaryMap.get("summary"), "fileId", summaryDoc.get("id"), "fileName", summaryDoc.get("fileName")) : null; // Extract subject
                         } catch (Exception e) {
                             e.printStackTrace();
                             return null;

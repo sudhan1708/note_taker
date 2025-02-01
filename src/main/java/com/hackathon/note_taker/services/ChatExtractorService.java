@@ -7,6 +7,9 @@ import com.hackathon.note_taker.utils.GenericDocumentProcessor;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.search.aggregations.AggregationBuilders;
+import org.elasticsearch.search.aggregations.BucketOrder;
+import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
@@ -82,5 +85,50 @@ public class ChatExtractorService {
         sourceBuilder.query(QueryBuilders.boolQuery().filter(filter));
         List<Map<String, Object>> chatDocuments = elasticBaseRepository.getResultsByQuery(CHAT_INDEX, sourceBuilder, Integer.MAX_VALUE);
         return chatDocuments.stream().map(chatDoc -> chatDoc.get("message").toString()).toList();
+    }
+
+    public List<Map<String, Object>> getChatsTalkCount(String fileId) {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.size(0); // Only aggregations, no hits
+        BoolQueryBuilder filter = new BoolQueryBuilder();
+        filter.must(QueryBuilders.termQuery("fileId.keyword", fileId)); // Apply filter on fileId
+        searchSourceBuilder.query(filter);
+
+        TermsAggregationBuilder aggregation = AggregationBuilders
+                .terms("top_buckets")    // Aggregation name
+                .field("sender.keyword") // Field to aggregate on
+                .size(3)                 // Get top 3 results
+                .order(BucketOrder.count(false));  // Order by count in descending order
+
+        searchSourceBuilder.aggregation(aggregation);
+        Map<String, Object> aggregatedResults = elasticBaseRepository.getAggregationResults(CHAT_INDEX, searchSourceBuilder);
+        List<Map<String, Object>> talkCounts = new ArrayList<>();
+        if (aggregatedResults.containsKey("aggregations")) {
+            Map<String, Object> aggregations = (Map<String, Object>) aggregatedResults.get("aggregations");
+
+            if (aggregations.containsKey("top_buckets")) {
+                List<Map<String, Object>> topBuckets = (List<Map<String, Object>>) aggregations.get("top_buckets");
+
+                // Calculate total count (ensure it's a Long and convert it properly)
+                long totalCount = topBuckets.stream()
+                        .mapToLong(bucket -> (long) bucket.get("count")) // Use Long to prevent casting errors
+                        .sum();
+
+                // Compute and store ratios
+                for (Map<String, Object> bucket : topBuckets) {
+                    long count = (long) bucket.get("count"); // Safely cast to Long
+                    double ratio = totalCount > 0 ? ((double) count) / totalCount : 0.0;
+
+                    talkCounts.add(Map.of(
+                            "sender", bucket.get("key"),  // Use "key" for sender
+                            "count", count,                // Keep count as Long
+                            "ratio", String.format("%.2f", ratio) // Format ratio to 2 decimal places
+                    ));
+                }
+
+        }
+
+        }
+        return talkCounts;
     }
 }
